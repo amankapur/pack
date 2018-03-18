@@ -1,0 +1,12 @@
+.DS_STORE
+ENV/
+data/
+datewise/
+output/
+*.p
+*.pyc
+*.pdf
+*.txt
+*.xlsx
+.Python
+*.zip
