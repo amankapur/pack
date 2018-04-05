@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 class xl2pickle(object):
 
-	def __init__(self, in_path, out_path, columns, use_all_sheets=False):
+	def __init__(self, in_path, out_path, columns, use_all_sheets=False, header_rows=1):
 
 		if not os.path.isdir(in_path):
 			raise ValueError('Input path is not a valid directory')
@@ -23,6 +23,7 @@ class xl2pickle(object):
 		self.out_path = out_path
 		self.columns = columns
 		self.use_all_sheets = use_all_sheets
+		self.header_rows = header_rows
 
 	def _get_formatter(self, t):
 		if t == int:
@@ -43,7 +44,7 @@ class xl2pickle(object):
 				wb = load_workbook(f, data_only=True)
 				for sh_name in wb.sheetnames:
 					ws = wb[sh_name]
-					for r_i in range(2, ws.max_row+1):
+					for r_i in range(self.header_rows+1, ws.max_row+1):
 						row_data = {}
 						for col in self.columns:
 							cell = ws.cell(row=r_i, column=col['index'])
