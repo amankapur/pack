@@ -1,9 +1,46 @@
 import math
 import datetime
 
+from mailmerge import MailMerge
 from copy import copy
 
 from openpyxl.styles import Alignment, Font, Border, Side
+
+from pprint import pprint
+
+#keymap is a has str->str
+# it maps keys of the in_doc merge fields to data keys/funcs
+# data is [{..},{...}] format
+def my_merge(in_doc_path, out_doc_path, data, key_map=None):
+  mm_data = []
+  if key_map:
+    for d in data:
+      mm_d = {}
+
+      for mm_key, d_key in key_map.iteritems():
+        v = ''
+        if callable(d_key):
+          v = d_key(d)
+        else:
+          v = d[d_key]
+
+        mm_d[mm_key] = v
+
+      mm_data.append(mm_d)
+  else:
+    mm_data = data
+
+  formatted_d = [{},{}]
+  for d in mm_data:
+    for k,v in d.iteritems():
+      d[k] = str(v)
+    formatted_d.append(d)
+
+  MAX_SIZE_PER_FILE = 5000
+  with MailMerge(in_doc_path) as document:
+    document.merge_pages(formatted_d[:MAX_SIZE_PER_FILE])
+    document.write(out_doc_path)
+
 
 CELL_STYLES = {
   'HEADER':{

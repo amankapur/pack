@@ -2,12 +2,22 @@ import pickle
 
 class Store(object):
 
-	def __init__(self, file_path, validator=None, formatter=None):
+	def __init__(self, file_path, validator=None, formatter=None, exploder=None):
 		self.data = []
 		with open(file_path, 'r') as f:
-			all_data = pickle.load(f)
+
 			self.validator = validator
 			self.formatter = formatter
+			self.exploder = exploder
+
+			all_data = pickle.load(f)
+
+			if exploder and callable(exploder):
+				exploded_data = []
+				for d in all_data:
+					exploded_data += exploder(d)
+				all_data = exploded_data
+
 			if validator and callable(validator):
 				for d in all_data:
 					if validator(d):
@@ -71,13 +81,20 @@ class Store(object):
 
 		self.data = data
 
-	def group_by(self, keys):
+	def group_by(self, keys, expect_single=False):
 		def _group(datum, k):
 			data = {}
 			for d in datum:
-				if d[k] not in data.keys():
-					data[d[k]] = []
-				data[d[k]].append(d)
+				if d[k]:
+					if d[k] not in data.keys():
+						if expect_single:
+							data[d[k]] = d
+						else:
+							data[d[k]] = [d]
+					elif expect_single:
+						raise ValueError('Expected single item in group_by')
+					else:
+						data[d[k]].append(d)
 			return data
 
 		if type(keys) in [str, unicode]:
