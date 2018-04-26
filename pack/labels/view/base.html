@@ -4,35 +4,32 @@
 
       @font-face {
         font-family: "Univers";
-        src: url(file:///Users/amankapur/Documents/dad/pack/labels/view/font/UniversLTStd.otf) format("truetype");
+        src: url(file:///Users/amankapur/Documents/dad/pack/pack/labels/view/font/UniversLTStd.otf) format("truetype");
       }
 
       @font-face {
         font-family: "Univers";
-        src: url(file:///Users/amankapur/Documents/dad/pack/labels/view/font/UniversLTStd-Bold.otf) format("truetype");
+        src: url(file:///Users/amankapur/Documents/dad/pack/pack/labels/view/font/UniversLTStd-Bold.otf) format("truetype");
         font-weight: bold;
       }
 
       html, body {
         width: 100%;
-        height: 152.4mm;
+        height: #PAGE_HEIGHT mm;
         margin: 0px;
         padding: 0px;
         font-size:12.0pt;
         font-family: Univers;
       }
 
-      .body {
-        display:table;
-      }
-
       .page {
         page-break-before:always;
         clear: both;
         width: 100%;
-        height: 152mm;
+        height: #PAGE_HEIGHT mm;
         display: table;
       }
+
       .label {
         display: table-cell;
         vertical-align: middle;
@@ -48,79 +45,25 @@
       .left {
         float: left;
       }
-      .value {
+      .font-bold {
         font-weight: bold;
       }
-      .big {
-        font-size: 18pt;
-        margin-top: 6px;
-        margin-bottom: 6px;
+      .font-normal {
+        font-weight: normal;
       }
-      .big .value {
-        font-size: 20pt;
+      .vcenter {
+        position: relative;
+        top: 50%;
+        transform: translateY(-50%);
+        -webkit-transform: translateY(-50%);
       }
-
-      .bigger.value {
-        font-size: 24pt;
-      }
-
-      .address p {
-        margin-top: 0px;
-        margin-bottom: 0px;
-        font-weight: bold;
-        font-size: 18px;
-      }
-
-      h2 {
-        display: inline-block;
-      }
-
-      .waybill {
-        padding: 8px;
-        border: 1px solid black;
-        text-align: center;
-        min-width: 130px;
-        margin: 0px 55px 25px 55px;
-      }
-
-      .waybill p {
-        margin-top: 3px;
-        margin-bottom: 3px;
-      }
-
-
-      .address_box {
-        border: 1px solid black;
-        text-align: left;
-      }
-
-      .address_box p {
-        margin-top: 3px;
-        margin-bottom: 3px;
-      }
-
-      table {
-        width: 90%;
-        margin: 0 auto;
-      }
-
-      td {
-        padding: 16px;
-      }
-      tr.spacer {
-        height: 20px;
-      }
-
-      .headers {
-        margin-bottom: 20px;
-      }
-
 
     </style>
 
   </head>
 
   <body>
+    #custom_style
     #pages
   </body>
 </html>
