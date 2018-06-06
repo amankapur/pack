@@ -3,6 +3,8 @@ import os
 import string
 import math
 
+from pprint import pprint
+
 from pack.utils import replace_all
 
 
@@ -16,14 +18,12 @@ def g_pdf(fname, html, custom_options={}):
 		'margin-top': '0',
 		'margin-left': '0',
 		'margin-right': '0',
-		'dpi': 300,
-		'javascript-delay': 2500
+		'dpi': 300
 	}
 
 	for k,v in custom_options.iteritems():
 		if k in options:
 			options[k] = v
-
 	pdfkit.from_string(html, fname, options=options)
 
 def make_labels(label_data, label_template, output_file, options={}, debug=False):
@@ -31,7 +31,8 @@ def make_labels(label_data, label_template, output_file, options={}, debug=False
 		'custom_style': None,
 		'max_label_per_file': len(label_data)+1,
 		'duplicate': False,
-		'page-height': 165.4
+		'page-height': 165.4,
+		'page-width': 165.4
 	}
 
 	for k,v in defaults.iteritems():

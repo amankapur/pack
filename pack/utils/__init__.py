@@ -4,7 +4,7 @@ import datetime
 from mailmerge import MailMerge
 from copy import copy
 
-from openpyxl.styles import Alignment, Font, Border, Side
+from openpyxl.styles import Alignment, Font, Border, Side, NamedStyle
 
 from pprint import pprint
 
@@ -83,19 +83,27 @@ CELL_STYLES = {
 	'TITLE':{
 		'alignment': Alignment(horizontal='center', vertical='center'),
 		'font': Font(bold=True, size=15)
-	}
+	},
+	'DATE_STYLE': NamedStyle(name='datetime', number_format='DD/MM/YYYY')
 }
 
 def insert_row(sheet, data, row_num, styles={}):
 	col_idx = 1
 	for d in data:
 		cell = sheet.cell(row=row_num, column=col_idx, value=d or "")
+
+		if isinstance(d, datetime.datetime) or isinstance(d, datetime.date):
+			cell.style = CELL_STYLES['DATE_STYLE']
+
 		if "alignment" in styles.keys():
 			cell.alignment = styles["alignment"]
 		if "font" in styles.keys():
 			cell.font = styles["font"]
 		if 'border' in styles.keys():
 			cell.border = styles['border']
+
+
+
 		col_idx +=1
 
 
@@ -106,6 +114,24 @@ def copy_style(new_cell, cell):
 	new_cell.number_format = copy(cell.number_format)
 	new_cell.protection = copy(cell.protection)
 	new_cell.alignment = copy(cell.alignment)
+
+def get_str(k):
+	if type(k) == datetime.datetime:
+		d = str(k.day)
+		if len(d) < 2:
+			d = '0' + d
+
+		m = str(k.month)
+		if len(m) < 2:
+			m = '0' + m
+
+		y = str(k.year)
+		if len(y) > 2:
+			y = y[2:]
+
+		return '%s/%s/%s'%(d,m,y)
+	else:
+		return str(k)
 
 def display_from_to(from_val, to_val):
 	if from_val is None or to_val is None:
@@ -143,11 +169,11 @@ def zerofy(n):
 		return str(n)
 
 def time_plus(time, timedelta):
-		start = datetime.datetime(
-				2000, 1, 1,
-				hour=time.hour, minute=time.minute, second=time.second)
-		end = start + timedelta
-		return end.time()
+	start = datetime.datetime(
+			2000, 1, 1,
+			hour=time.hour, minute=time.minute, second=time.second)
+	end = start + timedelta
+	return end.time()
 
 
 
@@ -204,7 +230,7 @@ def group_by(input_data, keys, expect_single=False):
 		data[k] = _group(datum, keys[1])
 
 	return data
-		
+
 
 def replace_all(string, d):
 	s = string
