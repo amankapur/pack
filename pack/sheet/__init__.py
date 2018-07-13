@@ -45,7 +45,8 @@ class Sheet():
 		self.options = {
 			'xls': False,
 			'title': None,
-			'autosize': True
+			'autosize': True,
+			'freeze_headers': True
 		}
 
 		self._wb = Workbook()
@@ -62,6 +63,7 @@ class Sheet():
 		self._sub_total_data = {}
 
 		self._grand_total_props = None
+		self._group_cols = {}
 
 	def _set_cell(self, value, row_idx, col_idx, style="TEXT"):
 		cell = self._ws.cell(row=row_idx, column=col_idx+1, value=value or "")
@@ -95,6 +97,8 @@ class Sheet():
 			for sub_idx, sub_func in self._sub_total_funcs.iteritems():
 				if sub_idx not in self._sub_total_data.keys():
 					self._sub_total_data[sub_idx] = 0
+					if sub_func == 'count_uniq':
+						self._sub_total_data[sub_idx] = []
 
 				val = row_data[sub_idx]
 				if sub_func == 'count':
@@ -105,6 +109,8 @@ class Sheet():
 					self._sub_total_data[sub_idx] = min(self._sub_total_data[sub_idx], val)
 				elif sub_func == 'max':
 					self._sub_total_data[sub_idx] = max(self._sub_total_data[sub_idx], val)
+				elif sub_func == 'count_uniq':
+					self._sub_total_data[sub_idx] = list(set(self._sub_total_data[sub_idx]+[val]))
 
 				self._sub_total_data[self._sub_total_idx] = row_data[self._sub_total_idx]
 
@@ -117,8 +123,11 @@ class Sheet():
 			if idx == self._sub_total_idx:
 				r[idx] = get_str(val) + ' Total'
 			else:
-				r[idx] = val
-		
+				if type(val) == list:
+					r[idx] = len(val)
+				else:
+					r[idx] = val
+
 		self._insert_row(r, row_idx, 'HEADER')
 		if page_break:
 			self._ws.page_breaks.append(Break(id=row_idx))
@@ -182,6 +191,17 @@ class Sheet():
 					r_idx += 1
 					sub_total_val = row_data[self._sub_total_idx]
 
+			if i != 0:
+				prev_row_data = sorted_data[i-1]
+				for group_col_idx, group_col_val in self._group_cols.iteritems():
+					if row_data[group_col_idx] == group_col_val:
+						row_data[group_col_idx] = None
+					else:
+						self._group_cols[group_col_idx] = row_data[group_col_idx]
+			else:
+				for group_col_idx, group_col_val in self._group_cols.iteritems():
+					self._group_cols[group_col_idx] = row_data[group_col_idx]
+
 			self._insert_row(row_data, r_idx, 'TEXT')
 
 			if has_subtotal:
@@ -206,6 +226,10 @@ class Sheet():
 		if self.options['autosize']:
 			for col_idx, max_w in self._max_width.iteritems():
 				self._ws.column_dimensions[chr(col_idx+97).upper()].width = max_w
+
+	def _freeze_headers(self):
+		if self.options['freeze_headers']:
+			self._ws.freeze_panes = "A%s" % str(len(self.headers)+1)
 
 
 	def _create(self):
@@ -254,6 +278,9 @@ class Sheet():
 							self._grand_total_props = {}
 						self._grand_total_props[col_idx] = d['grand_total_func']
 
+					if 'group_col' in d:
+						self._group_cols[col_idx] = None
+
 			else:
 				last_header_text.append(h)
 
@@ -275,5 +302,6 @@ class Sheet():
 
 		self._set_print_headers()
 		self._auto_size_columns()
+		self._freeze_headers()
 		self._create()
 		self._xls()

@@ -210,19 +210,25 @@ def group_by(input_data, keys, expect_single=False):
 	def _group(datum, k):
 		data = {}
 		for d in datum:
-			if d[k]:
-				if d[k] not in data.keys():
+			v = None
+			if callable(k):
+				v = k(d)
+			else:
+				v = d[k]
+			if v:
+				if v not in data.keys():
 					if expect_single:
-						data[d[k]] = d
+						data[v] = d
 					else:
-						data[d[k]] = [d]
+						data[v] = [d]
 				elif expect_single:
+					pprint(d)
 					raise ValueError('Expected single item in group_by')
 				else:
-					data[d[k]].append(d)
+					data[v].append(d)
 		return data
 
-	if type(keys) in [str, unicode]:
+	if type(keys) in [str, unicode] or callable(keys):
 		return _group(input_data, keys)
 
 	data = _group(input_data, keys[0])

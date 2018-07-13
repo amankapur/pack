@@ -2,6 +2,7 @@ import os
 import pickle
 import logging
 
+from pprint import pprint
 from openpyxl import load_workbook
 
 
@@ -32,27 +33,71 @@ class xl2pickle(object):
 				return float(str(value))
 			return f
 
+	def _get_merged_hash(self, ws):
+		ranges = {}
+		for c_r in ws.merged_cells.ranges:
+			if c_r.min_col == c_r.max_col:
+				ranges[(c_r.min_col, c_r.min_row)] = {
+					'min_row': c_r.min_row,
+					'max_row': c_r.max_row,
+					'jump': c_r.max_row - c_r.min_row + 1
+				}
+		return ranges
+
 	def _read_file(self, f):
 		logger.info('Reading from %s' % (f))
 		data = []
 		wb = load_workbook(f, data_only=True)
 		for sh_name in wb.sheetnames:
 			ws = wb[sh_name]
-			for r_i in range(self.header_rows+1, ws.max_row+1):
+			r_i = self.header_rows+1
+			m_hash = self._get_merged_hash(ws)
+			while r_i < ws.max_row+1:
 				row_data = {}
+				row_jump = 1
 				for col in self.columns:
-					cell = ws.cell(row=r_i, column=col['index'])
-					val = cell.value
-					if cell.value != None:
-						if 'formatter' in col.keys():
-							val = col['formatter'](cell.value)
-						elif 'type' in col.keys():
-							val = self._get_formatter(col['type'])(cell.value)
-						elif type(cell.value) in [str, unicode]:
-							val = cell.value.strip()
 
-					row_data[col['name']] = val
+					if 'merged_rows' in col:
+						k = (col['index'], r_i)
+						if k not in m_hash:
+							pprint(m_hash)
+						row_jump = m_hash[k]['jump']
+
+					vals = None
+					for i in range(row_jump):
+						cell = ws.cell(row=r_i+i, column=col['index'])
+						if cell.value != None:
+							try:
+								v = str(cell.value)
+							except:
+								logger.warning('Can\'t convert %s to string at %s' % (cell.value, cell.coordinate))
+
+							if vals == None:
+								vals = [cell.value]
+							else:
+								vals.append(cell.value)
+
+					if vals:
+						if 'formatter' in col.keys():
+							vals = [col['formatter'](val) for val in  vals]
+						elif 'type' in col.keys():
+							vals = [self._get_formatter(col['type'])(val) for val in vals]
+						else:
+							k = []
+							for val in vals:
+								if type(val) in [str, unicode]:
+									k.append(val.strip())
+								else:
+									k.append(val)
+							vals = k
+
+					if vals and len(vals) == 1:
+						vals = vals[0]
+					row_data[col['name']] = vals
+
 				data.append(row_data)
+				r_i += row_jump
+
 			if not self.use_all_sheets:
 				break
 		return data

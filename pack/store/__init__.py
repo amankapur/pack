@@ -42,23 +42,11 @@ class Store(object):
 		return total
 
 	def sort_by(self, col_names):
-
-		def multikeysort(items, columns):
-			from operator import itemgetter
-			comparers = [ ((itemgetter(col[1:].strip()), -1) if col.startswith('-') else (itemgetter(col.strip()), 1)) for col in columns]
-			def comparer(left, right):
-					for fn, mult in comparers:
-							result = cmp(fn(left), fn(right))
-							if result:
-									return mult * result
-					else:
-							return 0
-			return sorted(items, cmp=comparer)
-
 		if not self._sort_by == col_names:
-			self.data = multikeysort(self.data, col_names)
+			self.data = sort_by(self.data, col_names)
 			self._sort_by = col_names
 		return self.data
+		
 
 	def pluck(self, col_name):
 		vals = []
@@ -93,29 +81,7 @@ class Store(object):
 		self.data = data
 
 	def group_by(self, keys, expect_single=False):
-		def _group(datum, k):
-			data = {}
-			for d in datum:
-				if d[k]:
-					if d[k] not in data.keys():
-						if expect_single:
-							data[d[k]] = d
-						else:
-							data[d[k]] = [d]
-					elif expect_single:
-						raise ValueError('Expected single item in group_by')
-					else:
-						data[d[k]].append(d)
-			return data
-
-		if type(keys) in [str, unicode]:
-			return _group(self.data, keys)
-
-		data = _group(self.data, keys[0])
-		for k, datum in data.iteritems():
-			data[k] = _group(datum, keys[1])
-
-		return data
+		return group_by(self.data, keys, expect_single)
 
 	"""
 	packing_level is array of :
@@ -129,7 +95,19 @@ class Store(object):
 		}
 	"""
 	def create_packaging(self, packing_levels):
-		for p_level in packing_levels:
+
+		def _get_ratio_val(p_level):
+			r = p_level['ratio']
+			return r(d) if callable(r) else r
+
+		def _get_splits(p_level, next_name, d):
+			splits = None
+			if 'custom_splitting' in p_level:
+				get_split = p_level['custom_splitting']
+				splits = get_split(d['packaging']['%s_count'%next_name], _get_ratio_val(p_level), d)
+			return splits
+
+		for p_idx, p_level in enumerate(packing_levels):
 			name = p_level['name']
 			numbering = {}
 			if 'numbering' in p_level:
@@ -143,21 +121,32 @@ class Store(object):
 
 			reset_val = None
 
+			prev_name = None
+			if p_idx != 0:
+				prev_level = packing_levels[p_idx-1]
+				prev_name = prev_level['name']
+
 			for d in self.data:
 				if 'packaging' not in d:
 					d['packaging'] = {}
 
-				if 'reset' in numbering and reset_val != numbering['reset']:
+				if 'reset' in numbering and reset_val != d[numbering['reset']]:
 					v = numbering['reset_value']
-					from_number = v(d) if callable(v) else v
-					reset_val = numbering['reset']
+					if from_number not in [1, p_level['numbering']['start_value'] if 'start_value' in p_level['numbering'] else 0]:
+						from_number = v(from_number, d) if callable(v) else v
+					reset_val = d[numbering['reset']]
 
 				d['packaging']['%s_from'%name] = from_number
 
-				r = p_level['ratio']
-				ratio = r(d) if callable(r) else r
+				ratio = _get_ratio_val(p_level)
+
+				splits = None
+				if prev_name:
+					splits = _get_splits(p_level, prev_name, d)
 
 				q = int(math.ceil(float(d['quantity'])/ratio))
+				if splits and len(splits)>0:
+					q = len(splits)
 
 				to_number = from_number + q - 1
 
@@ -181,18 +170,12 @@ class Store(object):
 				next_name = next_level['name']
 				n_p_from = p['%s_from'%next_name]
 
-				splits = None
-				if 'custom_splitting' in p_level:
-					get_split = p_level['custom_splitting']
-					splits = get_split(p['%s_count'%next_name])
-
-					if len(range(p['%s_from'%name], p['%s_to'%name]+1)) != len(splits):
-						print 'Splits length is not the same for %s : %s' % (name, str(p['%s_count'%next_name]))
+				splits = _get_splits(p_level, next_name, d)
 
 				arr = []
 
 				for idx, i in enumerate(range(p['%s_from'%name], p['%s_to'%name]+1)):
-					n_p_to = min(n_p_from + p_level['ratio']/next_level['ratio'] - 1, p['%s_to'%next_name])
+					n_p_to = min(n_p_from + _get_ratio_val(p_level)/_get_ratio_val(next_level) - 1, p['%s_to'%next_name])
 
 					count = n_p_to - n_p_from + 1
 					if splits:

@@ -96,3 +96,9 @@ def _create_html_labels(data, label_template, output_file, options, debug):
 		debug.close()
 
 	g_pdf(output_file, render_html, options)
+
+def create_id_label(id_name, out_file, options={}):
+	my_path = os.path.abspath(os.path.dirname(__file__))
+	base_html = open(my_path + "/view/id.html", 'r').read()
+	render_html = base_html.replace('#ID_NAME', id_name)
+	g_pdf(out_file, render_html, options)
