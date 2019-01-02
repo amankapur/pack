@@ -1,6 +1,5 @@
 import pickle
 import math
-
 from pack.utils import group_by, sort_by
 
 class Store(object):
@@ -10,29 +9,40 @@ class Store(object):
 
 		self._sort_by = None
 
-		with open(file_path, 'r') as f:
+		all_data = []
 
-			self.validator = validator
-			self.formatter = formatter
-			self.exploder = exploder
-
+		if type(file_path) in [str, unicode]:
+			f = open(file_path, "r")
 			all_data = pickle.load(f)
+			f.close()
+		elif isinstance(file_path, list):
+			for f_path in file_path:
+				f = open(f_path, "r")
+				all_data += pickle.load(f)
+				f.close()
+		else:
+			raise "File path must be string or list"
 
-			if exploder and callable(exploder):
-				exploded_data = []
-				for d in all_data:
-					exploded_data += exploder(d)
-				all_data = exploded_data
 
-			if validator and callable(validator):
-				for d in all_data:
-					if validator(d):
-						self.data.append(d)
-			else:
-				self.data = all_data
+		self.validator = validator
+		self.formatter = formatter
+		self.exploder = exploder
 
-			if formatter:
-				self.data = [formatter(d) for d in self.data]
+		if exploder and callable(exploder):
+			exploded_data = []
+			for d in all_data:
+				exploded_data += exploder(d)
+			all_data = exploded_data
+
+		if validator and callable(validator):
+			for d in all_data:
+				if validator(d):
+					self.data.append(d)
+		else:
+			self.data = all_data
+
+		if formatter:
+			self.data = [formatter(d) for d in self.data]
 
 
 	def get_total(self, k):
@@ -46,7 +56,7 @@ class Store(object):
 			self.data = sort_by(self.data, col_names)
 			self._sort_by = col_names
 		return self.data
-		
+
 
 	def pluck(self, col_name):
 		vals = []
@@ -191,3 +201,64 @@ class Store(object):
 					n_p_from = n_p_to + 1
 
 				d['packaging'][name+'s'] = arr
+
+
+	@staticmethod
+	def get_external_packaging(data, max_size, size_key, names=("container", "inner_container"), start_number=1):
+
+		def _get_size(d):
+			if type(size_key) in [str, unicode] and size_key in d:
+				return d[size_key]
+			elif callable(size_key):
+				return size_key(d)
+
+			return None
+
+		number = start_number
+		containers = []
+		container_size = 0
+		current_container = []
+
+		outer_name, inner_name = names
+		size_name = outer_name+"_size"
+		number_name = outer_name+'_number'
+
+		for d in data:
+			size = _get_size(d)
+
+			# if current container has space add it
+			if size + container_size <= max_size:
+				current_container.append(d)
+				container_size += size
+			else:
+				# try to fit in some other container for same center
+				added = False
+				for c in containers:
+					if size + c[size_name] <= max_size:
+						c[inner_name].append(d)
+						c[size_name] += size
+						added = True
+						break
+				# alas, create new container
+				if not added:
+					containers.append({
+						number_name: number,
+						size_name: container_size,
+						inner_name: current_container
+					})
+					number += 1
+					container_size = _get_size(d)
+					current_container = [d]
+
+
+		if len(current_container) > 0:
+			containers.append({
+				number_name: number,
+				size_name: container_size,
+				inner_name: current_container
+			})
+			number += 1
+			container_size = 0
+			current_container = []
+
+		return containers

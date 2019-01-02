@@ -95,6 +95,10 @@ def _create_html_labels(data, label_template, output_file, options, debug):
 		debug.write(render_html)
 		debug.close()
 
+	d_name = "/".join(output_file.split("/")[:-1])
+	if not os.path.isdir(d_name):
+		os.mkdir(d_name)
+
 	g_pdf(output_file, render_html, options)
 
 def create_id_label(id_name, out_file, options={}):

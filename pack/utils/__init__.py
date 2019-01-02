@@ -1,7 +1,7 @@
 import math
 import datetime
 
-from mailmerge import MailMerge
+#from mailmerge import MailMerge
 from copy import copy
 
 from openpyxl.styles import Alignment, Font, Border, Side, NamedStyle
@@ -33,35 +33,35 @@ def get_max(arr_of_dicts, key):
 #keymap is a has str->str
 # it maps keys of the in_doc merge fields to data keys/funcs
 # data is [{..},{...}] format
-def my_merge(in_doc_path, out_doc_path, data, key_map=None):
-	mm_data = []
-	if key_map:
-		for d in data:
-			mm_d = {}
-
-			for mm_key, d_key in key_map.iteritems():
-				v = ''
-				if callable(d_key):
-					v = d_key(d)
-				else:
-					v = d[d_key]
-
-				mm_d[mm_key] = v
-
-			mm_data.append(mm_d)
-	else:
-		mm_data = data
-
-	formatted_d = [{},{}]
-	for d in mm_data:
-		for k,v in d.iteritems():
-			d[k] = str(v)
-		formatted_d.append(d)
-
-	MAX_SIZE_PER_FILE = 5000
-	with MailMerge(in_doc_path) as document:
-		document.merge_pages(formatted_d[:MAX_SIZE_PER_FILE])
-		document.write(out_doc_path)
+#def my_merge(in_doc_path, out_doc_path, data, key_map=None):
+#    mm_data = []
+#    if key_map:
+#        for d in data:
+#            mm_d = {}
+#
+#            for mm_key, d_key in key_map.iteritems():
+#                v = ''
+#                if callable(d_key):
+#                    v = d_key(d)
+#                else:
+#                    v = d[d_key]
+#
+#                mm_d[mm_key] = v
+#
+#            mm_data.append(mm_d)
+#    else:
+#        mm_data = data
+#
+#    formatted_d = [{},{}]
+#    for d in mm_data:
+#        for k,v in d.iteritems():
+#            d[k] = str(v)
+#        formatted_d.append(d)
+#
+#    MAX_SIZE_PER_FILE = 5000
+#    with MailMerge(in_doc_path) as document:
+#        document.merge_pages(formatted_d[:MAX_SIZE_PER_FILE])
+#        document.write(out_doc_path)
 
 
 CELL_STYLES = {
@@ -223,6 +223,7 @@ def group_by(input_data, keys, expect_single=False):
 						data[v] = [d]
 				elif expect_single:
 					pprint(d)
+					pprint(data[v])
 					raise ValueError('Expected single item in group_by')
 				else:
 					data[v].append(d)
@@ -243,3 +244,37 @@ def replace_all(string, d):
 	for k,v in d.items():
 		s = s.replace(k, str(v))
 	return s
+
+def str_grouping(arr):
+	arr = list(set(arr))
+	arr.sort()
+
+	groups = []
+
+	i = 0
+	g = []
+	group_start = arr[i]
+	while i < len(arr):
+		if i + 1 < len(arr):
+			if arr[i+1] - arr[i] != 1:
+				g.append(display_from_to(group_start, arr[i]))
+				group_start = arr[i+1]
+		else:
+			g.append(display_from_to(group_start, arr[i]))
+
+		i += 1
+	return g
+
+
+class Cache():
+	def __init__(self):
+		self._data = {}
+
+	def add(self, key, value):
+		self._data[key] = value
+		return value
+
+	def get(self, key):
+		if key in self._data:
+			return self._data[key]
+		return None

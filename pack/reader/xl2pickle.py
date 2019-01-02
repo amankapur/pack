@@ -4,6 +4,7 @@ import logging
 
 from pprint import pprint
 from openpyxl import load_workbook
+from tqdm import tqdm
 
 
 logging.basicConfig(level=logging.INFO)
@@ -52,7 +53,9 @@ class xl2pickle(object):
 			ws = wb[sh_name]
 			r_i = self.header_rows+1
 			m_hash = self._get_merged_hash(ws)
-			while r_i < ws.max_row+1:
+			max_row = ws.max_row + 1
+			# pbar = tqdm(total=max_row + 1)
+			while r_i < max_row:
 				row_data = {}
 				row_jump = 1
 				for col in self.columns:
@@ -98,6 +101,9 @@ class xl2pickle(object):
 				data.append(row_data)
 				r_i += row_jump
 
+				# pbar.update(row_jump)
+
+			# pbar.close()
 			if not self.use_all_sheets:
 				break
 		return data

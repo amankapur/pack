@@ -7,7 +7,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, Border, Side, NamedStyle
 from openpyxl.worksheet.pagebreak import Break
 
-from pack.utils import get_str
+from pack.utils import get_str, str_grouping
 
 
 CELL_STYLES = {
@@ -101,6 +101,12 @@ class Sheet():
 						self._sub_total_data[sub_idx] = []
 
 				val = row_data[sub_idx]
+				if val == None:
+					val = 0
+
+				if type(val) in [str, unicode] and len(val.strip())==0:
+					val = 0
+
 				if sub_func == 'count':
 					self._sub_total_data[sub_idx] += 1
 				elif sub_func == 'sum':
@@ -110,7 +116,11 @@ class Sheet():
 				elif sub_func == 'max':
 					self._sub_total_data[sub_idx] = max(self._sub_total_data[sub_idx], val)
 				elif sub_func == 'count_uniq':
-					self._sub_total_data[sub_idx] = list(set(self._sub_total_data[sub_idx]+[val]))
+					if '-' in val:
+						val = range(int(val.split("-")[0]), int(val.split("-")[1])+1)
+					else:
+						val = [val]
+					self._sub_total_data[sub_idx] = list(set(self._sub_total_data[sub_idx]+val))
 
 				self._sub_total_data[self._sub_total_idx] = row_data[self._sub_total_idx]
 
@@ -124,7 +134,9 @@ class Sheet():
 				r[idx] = get_str(val) + ' Total'
 			else:
 				if type(val) == list:
-					r[idx] = len(val)
+					# r[idx] = len(val)
+					# pprint(val)
+					r[idx] = str(len(val))+ ' Total' + "\n (" + ", ".join(str_grouping([int(v) for v in val])) + ")"
 				else:
 					r[idx] = val
 
@@ -143,6 +155,7 @@ class Sheet():
 		sorted_data = self._get_sorted_data()
 		for col_idx, grand_total_func in self._grand_total_props.iteritems():
 			val_array = [d[col_idx] for d in sorted_data]
+			val_array = [0 if k == None else k for k in val_array]
 			if grand_total_func == 'sum':
 				val = sum(val_array)
 			elif grand_total_func == 'min':
