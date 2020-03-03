@@ -1,5 +1,7 @@
 import math
 import datetime
+import time
+
 
 #from mailmerge import MailMerge
 from copy import copy
@@ -9,6 +11,78 @@ from openpyxl.styles import Alignment, Font, Border, Side, NamedStyle
 from pprint import pprint
 
 import os
+import qrcode
+
+def timeit(method):
+	def timed(*args, **kw):
+		ts = time.time()
+		result = method(*args, **kw)
+		te = time.time()
+		if 'log_time' in kw:
+			name = kw.get('log_name', method.__name__.upper())
+			kw['log_time'][name] = int((te - ts) * 1000)
+		else:
+			print '%r  %2.2f ms' % (method.__name__, (te - ts) * 1000)
+		return result
+	return timed
+
+## takes 1000000 and returns 10,00,000
+def commafiy(input):
+  input_list = list(str(input))
+  if len(input_list) <= 1:
+      formatted_input = input
+  else:
+      first_number = input_list.pop(0)
+      last_number = input_list.pop()
+      formatted_input = first_number + (
+          (''.join(l + ',' * (n % 2 == 1) for n, l in enumerate(reversed(input_list)))[::-1] + last_number)
+      )
+      if len(input_list) % 2 == 0:
+          formatted_input.lstrip(',')
+  return formatted_input
+
+def create_dir(out_dir):
+	if not os.path.exists(out_dir):
+		os.makedirs(out_dir)
+	return out_dir
+
+
+# s is qr code text
+def create_qr_code(s, options={}):
+	opts = {
+		'version': 1,
+		'error_correction': qrcode.constants.ERROR_CORRECT_H,
+		'box_size': 10,
+		'border': 1,
+		'fit': True,
+		'ext': 'jpg'
+	}
+
+	for k,v in options.iteritems():
+		opts[k] = v
+
+
+	out_dir = create_dir(os.path.abspath(os.path.dirname(__file__)) + "/qr_images/")
+
+	dir_s = s.replace('/', '_')
+	p = out_dir + '%s.%s' % (dir_s, opts['ext'])
+
+	if os.path.isfile(p):
+		return p
+
+	qr = qrcode.QRCode(
+		version = opts['version'],
+		error_correction = opts['error_correction'],
+		box_size = opts['box_size'],
+		border = opts['border'],
+	)
+
+	qr.add_data(s)
+	qr.make(fit=opts['fit'])
+	img = qr.make_image()
+
+	img.save(p)
+	return p
 
 
 # needs ssconvert installed
@@ -102,8 +176,6 @@ def insert_row(sheet, data, row_num, styles={}):
 		if 'border' in styles.keys():
 			cell.border = styles['border']
 
-
-
 		col_idx +=1
 
 
@@ -114,6 +186,7 @@ def copy_style(new_cell, cell):
 	new_cell.number_format = copy(cell.number_format)
 	new_cell.protection = copy(cell.protection)
 	new_cell.alignment = copy(cell.alignment)
+
 
 def get_str(k):
 	if type(k) == datetime.datetime:
@@ -133,13 +206,13 @@ def get_str(k):
 	else:
 		return str(k)
 
-def display_from_to(from_val, to_val):
+def display_from_to(from_val, to_val, splitter="-"):
 	if from_val is None or to_val is None:
 		return None
 	if from_val == to_val:
 		return str(from_val)
 	else:
-		return str(from_val) + ' - ' + str(to_val)
+		return str(from_val) + ' %s ' % splitter + str(to_val)
 
 def display_time(t):
 	a = ' AM'
@@ -148,8 +221,14 @@ def display_time(t):
 	return str(t.hour%12) + ':' + str(t.minute) + a
 
 def display_month(m):
-	if 'MAR' in m :
-		return 'MARCH'
+	if m == 1:
+		return 'January'
+	if m == 3:
+		return 'March'
+	if m == 2:
+		return 'February'
+	if m == 4:
+		return 'April'
 	return m
 
 def round_up(x, n):
@@ -215,18 +294,19 @@ def group_by(input_data, keys, expect_single=False):
 				v = k(d)
 			else:
 				v = d[k]
-			if v:
-				if v not in data.keys():
-					if expect_single:
-						data[v] = d
-					else:
-						data[v] = [d]
-				elif expect_single:
-					pprint(d)
-					pprint(data[v])
-					raise ValueError('Expected single item in group_by')
+			# if v:
+			# if v not in data.keys():
+			if v not in data:
+				if expect_single:
+					data[v] = d
 				else:
-					data[v].append(d)
+					data[v] = [d]
+			elif expect_single:
+				pprint(d)
+				pprint(data[v])
+				raise ValueError('Expected single item in group_by')
+			else:
+				data[v].append(d)
 		return data
 
 	if type(keys) in [str, unicode] or callable(keys):
@@ -241,11 +321,14 @@ def group_by(input_data, keys, expect_single=False):
 
 def replace_all(string, d):
 	s = string
-	for k,v in d.items():
-		s = s.replace(k, str(v))
+	for k in reversed(sorted(d.keys(), key=len)):
+		v = d[k]
+		s = s.replace(k, v)
 	return s
 
-def str_grouping(arr):
+def str_grouping(arr, splitter="-"):
+	if arr == None or len(arr) == 0:
+		return []
 	arr = list(set(arr))
 	arr.sort()
 
@@ -257,13 +340,20 @@ def str_grouping(arr):
 	while i < len(arr):
 		if i + 1 < len(arr):
 			if arr[i+1] - arr[i] != 1:
-				g.append(display_from_to(group_start, arr[i]))
+				g.append(display_from_to(group_start, arr[i], splitter))
 				group_start = arr[i+1]
 		else:
-			g.append(display_from_to(group_start, arr[i]))
+			g.append(display_from_to(group_start, arr[i], splitter))
 
 		i += 1
+
+
 	return g
+
+def str_str_grouping(data, key=None, joiner=",", splitter="-"):
+	s = joiner	+ " "
+	arr = [d[key] if key else d for d in data]
+	return s.join(str_grouping(arr, splitter))
 
 
 class Cache():
@@ -278,3 +368,43 @@ class Cache():
 		if key in self._data:
 			return self._data[key]
 		return None
+
+from openpyxl.styles import Border, Side, PatternFill, Font, GradientFill, Alignment
+def style_range(ws, cell_range, border=Border(), fill=None, font=None, alignment=None):
+    """
+    Apply styles to a range of cells as if they were a single cell.
+
+    :param ws:  Excel worksheet instance
+    :param range: An excel range to style (e.g. A1:F20)
+    :param border: An openpyxl Border
+    :param fill: An openpyxl PatternFill or GradientFill
+    :param font: An openpyxl Font object
+    """
+
+    top = Border(top=border.top)
+    left = Border(left=border.left)
+    right = Border(right=border.right)
+    bottom = Border(bottom=border.bottom)
+
+    first_cell = ws[cell_range.split(":")[0]]
+    if alignment:
+        ws.merge_cells(cell_range)
+        first_cell.alignment = alignment
+
+    rows = ws[cell_range]
+    if font:
+        first_cell.font = font
+
+    for cell in rows[0]:
+        cell.border = cell.border + top
+    for cell in rows[-1]:
+        cell.border = cell.border + bottom
+
+    for row in rows:
+        l = row[0]
+        r = row[-1]
+        l.border = l.border + left
+        r.border = r.border + right
+        if fill:
+            for c in row:
+                c.fill = fill

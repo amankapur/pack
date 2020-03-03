@@ -5,15 +5,24 @@ from copy import copy
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, Border, Side, NamedStyle
-from openpyxl.worksheet.pagebreak import Break
+from openpyxl.worksheet.pagebreak import Break, PageBreak
+from openpyxl.utils import get_column_letter
 
-from pack.utils import get_str, str_grouping
+from pack.utils import get_str, str_grouping, style_range
 
 
 CELL_STYLES = {
 	'HEADER':{
 		'alignment': Alignment(horizontal='center', vertical='center', wrap_text="true"),
 		'font': Font(bold=True),
+		'border':  Border(left=Side(style='thin'),
+											 right=Side(style='thin'),
+											 top=Side(style='thin'),
+											 bottom=Side(style='thin'))
+	},
+	'HEADER_TOP':{
+		'alignment': Alignment(horizontal='center', vertical='center', wrap_text="true"),
+		'font': Font(bold=True, size=15),
 		'border':  Border(left=Side(style='thin'),
 											 right=Side(style='thin'),
 											 top=Side(style='thin'),
@@ -46,16 +55,25 @@ class Sheet():
 			'xls': False,
 			'title': None,
 			'autosize': True,
-			'freeze_headers': True
+			'freeze_headers': True,
+			'sub_total_page_break': True
 		}
-
-		self._wb = Workbook()
-		self._ws = self._wb.active
-		if self.options['title']:
-			self._ws.title = self.options['title']
 
 		for k,v in options.iteritems():
 			self.options[k] = v
+
+		self._wb = None
+		self._ws = None
+		if 'workbook' in self.options:
+			self._wb = self.options['workbook']
+			self._wb.create_sheet(self.options['title'])
+			self._ws = self._wb[self.options['title']]
+		else:
+			self._wb = Workbook()
+			self._ws = self._wb.active
+			if self.options['title']:
+				self._ws.title = options['title']
+
 
 		self._max_width = {}
 		self._sub_total_idx = None
@@ -64,6 +82,7 @@ class Sheet():
 
 		self._grand_total_props = None
 		self._group_cols = {}
+		self.breaks = []
 
 	def _set_cell(self, value, row_idx, col_idx, style="TEXT"):
 		cell = self._ws.cell(row=row_idx, column=col_idx+1, value=value or "")
@@ -80,17 +99,30 @@ class Sheet():
 		if 'border' in styles.keys():
 			cell.border = styles['border']
 
-		width = len(str(value))
-		if col_idx not in self._max_width.keys():
-			self._max_width[col_idx] = width
-		else:
-			self._max_width[col_idx] = max(self._max_width[col_idx], width)
+		width = len(str(value)) if type(value) != unicode else 10
+		if style != "HEADER_TOP":
+			if col_idx not in self._max_width.keys():
+				self._max_width[col_idx] = width
+			else:
+				self._max_width[col_idx] = max(self._max_width[col_idx], width)
 
 		return cell
 
 	def _insert_row(self, row_data, row_idx, style):
-		for col_idx, cell_val in enumerate(row_data):
-			self._set_cell(cell_val, row_idx, col_idx, style)
+		if style == 'HEADER_TOP':
+			self._ws.merge_cells(start_row=row_idx, start_column=1, end_row=row_idx, end_column=len(self.headers[-1]))
+			self._set_cell(row_data[0], row_idx, 0, style)
+
+			rang = 'A%s:%s%s' % (str(row_idx), get_column_letter(len(self.headers[-1])), str(row_idx))
+
+			s = CELL_STYLES[style]
+			style_range(self._ws, rang, border=s['border'], font=s['font'], alignment=s['alignment'])
+
+		else:
+			for col_idx, cell_val in enumerate(row_data):
+				if type(cell_val) == list:
+					cell_val = ", ".join([str(s) for s in cell_val])
+				self._set_cell(cell_val, row_idx, col_idx, style)
 
 	def _update_sub_total_data(self, row_data):
 		if self._sub_total_idx != None:
@@ -116,15 +148,18 @@ class Sheet():
 				elif sub_func == 'max':
 					self._sub_total_data[sub_idx] = max(self._sub_total_data[sub_idx], val)
 				elif sub_func == 'count_uniq':
-					if '-' in val:
-						val = range(int(val.split("-")[0]), int(val.split("-")[1])+1)
+					if type(val) in [str, unicode]:
+						if '-' in val:
+							val = range(int(val.split("-")[0]), int(val.split("-")[1])+1)
+						else:
+							val = [int(val)]
 					else:
 						val = [val]
 					self._sub_total_data[sub_idx] = list(set(self._sub_total_data[sub_idx]+val))
 
 				self._sub_total_data[self._sub_total_idx] = row_data[self._sub_total_idx]
 
-	def _insert_subtotal_row(self, row_idx, page_break=True):
+	def _insert_subtotal_row(self, row_idx, page_break):
 		r = []
 		for i in range(len(self.headers[-1])):
 			r.append("")
@@ -142,7 +177,8 @@ class Sheet():
 
 		self._insert_row(r, row_idx, 'HEADER')
 		if page_break:
-			self._ws.page_breaks.append(Break(id=row_idx))
+			# self._ws.page_breaks.append(Break(id=row_idx))
+			self.breaks.append(Break(id=row_idx))
 		self._sub_total_data = {}
 
 	def _insert_grandtotal_row(self, row_idx):
@@ -164,6 +200,15 @@ class Sheet():
 				val = max(val_array)
 			elif grand_total_func == 'count':
 				val = len(val_array)
+			elif grand_total_func == 'count_uniq':
+				big_arr = []
+				for v in val_array:
+					if type(v) in [str, unicode] and '-' in v:
+						big_arr += range(int(v.split("-")[0]), int(v.split("-")[1])+1)
+					else:
+						big_arr.append(v)
+
+				val = str(len(big_arr))+ ' Total' + "\n (" + ", ".join(str_grouping([int(v) for v in big_arr])) + ")"
 
 			r[col_idx] = val
 
@@ -186,8 +231,11 @@ class Sheet():
 
 	def _insert_headers(self):
 		r_idx = 1
-		for h in self.headers:
-			self._insert_row(h, r_idx, 'HEADER')
+		for i, h in enumerate(self.headers):
+			if i != len(self.headers) - 1 and len(self.headers)>1:
+				self._insert_row(h, r_idx, 'HEADER_TOP')
+			else:
+				self._insert_row(h, r_idx, 'HEADER')
 			r_idx += 1
 		return r_idx
 
@@ -200,7 +248,7 @@ class Sheet():
 				if sub_total_val == None:
 					sub_total_val = row_data[self._sub_total_idx]
 				if sub_total_val != row_data[self._sub_total_idx]:
-					self._insert_subtotal_row(r_idx)
+					self._insert_subtotal_row(r_idx, self.options['sub_total_page_break'])
 					r_idx += 1
 					sub_total_val = row_data[self._sub_total_idx]
 
@@ -238,7 +286,8 @@ class Sheet():
 	def _auto_size_columns(self):
 		if self.options['autosize']:
 			for col_idx, max_w in self._max_width.iteritems():
-				self._ws.column_dimensions[chr(col_idx+97).upper()].width = max_w
+				letter = get_column_letter(col_idx+1)
+				self._ws.column_dimensions[letter].width = max_w
 
 	def _freeze_headers(self):
 		if self.options['freeze_headers']:
@@ -248,6 +297,7 @@ class Sheet():
 	def _create(self):
 		print 'Creating sheet  %s ' % self.out_file
 		self._wb.save(self.out_file)
+
 
 	# needs ssconvert installed
 	def _xls(self):
@@ -309,12 +359,16 @@ class Sheet():
 	def add_rows(self, rows):
 		self.data = rows
 
-	def save(self):
+	def save(self, output=True):
 		r_idx = self._insert_headers()
 		self._insert_data(r_idx)
 
 		self._set_print_headers()
 		self._auto_size_columns()
 		self._freeze_headers()
-		self._create()
-		self._xls()
+
+		if output:
+			self._create()
+			self._xls()
+
+		return self

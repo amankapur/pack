@@ -1,5 +1,6 @@
 <html>
   <head>
+    <meta charset="utf-8"/>
     <style>
 
       @font-face {
@@ -14,27 +15,28 @@
       }
       @font-face {
         font-family: "Barcode";
-        src: url(file:///Users/amankapur/Documents/dad/delta-2/LabelMaker/Generator/view/font/free3of9.ttf) format("truetype");
+        src: url(file:///Users/amankapur/Documents/dad/pack/pack/labels/view/font/free3of9.ttf) format("truetype");
       }
 
-      .barcode {
-        font-family: "Barcode";
-      }
 
       html, body {
         width: 100%;
-        height: #PAGE_HEIGHT mm;
+        height: #PAGE_HEIGHT;
         margin: 0px;
         padding: 0px;
         font-size:12.0pt;
         font-family: Univers;
       }
 
+      .barcode {
+        font-family: "Barcode";
+      }
+
       .page {
         page-break-before:always;
         clear: both;
         width: 100%;
-        height: #PAGE_HEIGHT mm;
+        height: #PAGE_HEIGHT;
         display: table;
       }
 
@@ -53,6 +55,15 @@
       .left {
         float: left;
       }
+      .text-left {
+        text-align: left;
+      }
+      .text-center {
+        text-align: center;
+      }
+      .text-right {
+        text-align: right;
+      }
       .font-bold {
         font-weight: bold;
       }
@@ -62,7 +73,7 @@
       .vcenter {
         position: relative;
         top: 50%;
-        transform: translateY(-50%);
+        transform: translateY(-100%);
         -webkit-transform: translateY(-50%);
       }
 

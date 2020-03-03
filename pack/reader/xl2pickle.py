@@ -1,5 +1,5 @@
 import os
-import pickle
+import cPickle as pickle
 import logging
 
 from pprint import pprint
@@ -27,12 +27,29 @@ class xl2pickle(object):
 	def _get_formatter(self, t):
 		if t == int:
 			def f(value):
+				if value == None or value == "":
+					return 0
 				return int(float(str(value)))
 			return f
+
 		if t == float:
 			def f(value):
 				return float(str(value))
 			return f
+
+		if t == unicode:
+			def f(value):
+				if type(value) != unicode:
+					return unicode(value, "utf-8")
+				return value
+			return f
+
+		if t == str:
+			def f(value):
+				return str(value) if value else None
+			return f
+
+		print "read formatter for %s not found" % str(t)
 
 	def _get_merged_hash(self, ws):
 		ranges = {}
@@ -73,7 +90,7 @@ class xl2pickle(object):
 							try:
 								v = str(cell.value)
 							except:
-								logger.warning('Can\'t convert %s to string at %s' % (cell.value, cell.coordinate))
+								logger.warning(' Can\'t convert %s to string at %s' % (cell.value, cell.coordinate))
 
 							if vals == None:
 								vals = [cell.value]
@@ -97,7 +114,6 @@ class xl2pickle(object):
 					if vals and len(vals) == 1:
 						vals = vals[0]
 					row_data[col['name']] = vals
-
 				data.append(row_data)
 				r_i += row_jump
 

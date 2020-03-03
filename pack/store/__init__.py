@@ -1,27 +1,32 @@
-import pickle
+import cPickle as pickle
 import math
 from pack.utils import group_by, sort_by
+from pprint import pprint
+from copy import copy
 
 class Store(object):
 
-	def __init__(self, file_path, validator=None, formatter=None, exploder=None):
+	def __init__(self, file_path, validator=None, formatter=None, exploder=None, condenser_id=None, condenser=None, is_data=False):
 		self.data = []
 
 		self._sort_by = None
 
 		all_data = []
 
-		if type(file_path) in [str, unicode]:
-			f = open(file_path, "r")
-			all_data = pickle.load(f)
-			f.close()
-		elif isinstance(file_path, list):
-			for f_path in file_path:
-				f = open(f_path, "r")
-				all_data += pickle.load(f)
-				f.close()
+		if is_data:
+			all_data = file_path
 		else:
-			raise "File path must be string or list"
+			if type(file_path) in [str, unicode]:
+				f = open(file_path, "r")
+				all_data = pickle.load(f)
+				f.close()
+			elif isinstance(file_path, list):
+				for f_path in file_path:
+					f = open(f_path, "r")
+					all_data += pickle.load(f)
+					f.close()
+			else:
+				raise "File path must be string or list"
 
 
 		self.validator = validator
@@ -43,6 +48,12 @@ class Store(object):
 
 		if formatter:
 			self.data = [formatter(d) for d in self.data]
+
+		if condenser_id and condenser and callable(condenser):
+			condensed_data = []
+			for k, v in group_by(self.data, condenser_id).iteritems():
+				condensed_data += condenser(v)
+			self.data = condensed_data
 
 
 	def get_total(self, k):
@@ -93,6 +104,38 @@ class Store(object):
 	def group_by(self, keys, expect_single=False):
 		return group_by(self.data, keys, expect_single)
 
+	def where(self, dikt):
+		for d in self.data:
+			all_match = True
+			for k,v in dikt.iteritems():
+				if d[k] != v:
+					all_match = False
+
+			if all_match:
+				return d
+		return None
+
+	def remove(self, arr_dict):
+		new_data = []
+		removed = []
+		for d in self.data:
+			arr_values = []
+			for dictt in arr_dict:
+				values = []
+				for k,v in dictt.iteritems():
+					values.append(d[k] == v)
+
+				arr_values.append(all(values))
+
+			if any(arr_values):
+				removed.append(d)
+			else:
+				new_data.append(d)
+
+		self.data = new_data
+		return removed
+
+
 	"""
 	packing_level is array of :
 		{
@@ -100,7 +143,9 @@ class Store(object):
 			'name': 'trunk',
 			'ratio': lambda d: 300 if d['subject_code']=='E' else 600,
 			'numbering': {
-				'sort_order': ['set_number', 'subject_code', 'batch_number', 'center_number']
+				'sort_order': ['set_number', 'subject_code', 'batch_number', 'center_number'],
+				'reset': 'set_number',
+				'reset_value': 1 or ((x) => Math.ceil(x, 100) +1),
 			}
 		}
 	"""
@@ -145,6 +190,11 @@ class Store(object):
 					if from_number not in [1, p_level['numbering']['start_value'] if 'start_value' in p_level['numbering'] else 0]:
 						from_number = v(from_number, d) if callable(v) else v
 					reset_val = d[numbering['reset']]
+
+				# if 'reset' in numbering:
+				# 	if type(numbering['reset'] == list):
+				# 		for k in reversed(numbering['reset']):
+
 
 				d['packaging']['%s_from'%name] = from_number
 
@@ -200,11 +250,14 @@ class Store(object):
 					})
 					n_p_from = n_p_to + 1
 
-				d['packaging'][name+'s'] = arr
+				plural = name + 's'
+				if name == 'box':
+					plural = 'boxes'
+				d['packaging'][plural] = arr
 
 
 	@staticmethod
-	def get_external_packaging(data, max_size, size_key, names=("container", "inner_container"), start_number=1):
+	def get_external_packaging(data, max_size, size_key, names=("container", "inner_container"), start_number=1, jump_back=True, group_key=None):
 
 		def _get_size(d):
 			if type(size_key) in [str, unicode] and size_key in d:
@@ -212,6 +265,8 @@ class Store(object):
 			elif callable(size_key):
 				return size_key(d)
 
+			pprint(d)
+			print size_key, type(size_key)
 			return None
 
 		number = start_number
@@ -223,32 +278,66 @@ class Store(object):
 		size_name = outer_name+"_size"
 		number_name = outer_name+'_number'
 
-		for d in data:
-			size = _get_size(d)
+		def base_packing(base_data, number):
+			containers = []
+			container_size = 0
+			current_container = []
 
-			# if current container has space add it
-			if size + container_size <= max_size:
-				current_container.append(d)
-				container_size += size
-			else:
-				# try to fit in some other container for same center
-				added = False
-				for c in containers:
-					if size + c[size_name] <= max_size:
-						c[inner_name].append(d)
-						c[size_name] += size
-						added = True
-						break
-				# alas, create new container
-				if not added:
+			for d in base_data:
+				size = _get_size(d)
+
+				# if current container has space add it
+				if size + container_size <= max_size:
+					current_container.append(d)
+					container_size += size
+				else:
+					# try to fit in some other container for same center
+					added = False
+
+					if jump_back:
+						for c in containers:
+							if size + c[size_name] <= max_size:
+								c[inner_name].append(d)
+								c[size_name] += size
+								added = True
+								break
+					# alas, create new container
+					if not added:
+						containers.append({
+							number_name: number,
+							size_name: container_size,
+							inner_name: current_container
+						})
+						number += 1
+						container_size = _get_size(d)
+						current_container = [d]
+
+			return containers, current_container, container_size, number
+
+		if not group_key:
+			containers, current_container, container_size, number = base_packing(data, number)
+
+
+		else:
+			for g_key, g_data in sorted(group_by(data, group_key).iteritems()):
+				g_size = sum([_get_size(d) for d in g_data])
+
+				if g_size > max_size:
+					containers, current_container, container_size, number = base_packing(g_data, number)
+					# continue
+
+				if g_size + container_size <= max_size:
+					current_container += g_data
+					container_size += g_size
+				else:
 					containers.append({
 						number_name: number,
 						size_name: container_size,
 						inner_name: current_container
 					})
 					number += 1
-					container_size = _get_size(d)
-					current_container = [d]
+					container_size = g_size
+					current_container = copy(g_data)
 
 
 		if len(current_container) > 0:
